@@ -133,3 +133,4 @@ dmypy.json
 trash/
 testing/
 results/
+.idea/
