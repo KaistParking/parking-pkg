@@ -134,3 +134,4 @@ trash/
 testing/
 results/
 .idea/
+*/.DS_Store
