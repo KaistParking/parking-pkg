@@ -41,20 +41,21 @@ tag_status = {
     16: {'id': 16,  'trans': np.array([3.602, 3.89, 0]),    'rot': np.array([0, -1, 0])},
 }
 
-for tag_id in parking_spots:
-    contours = parking_spots[tag_id]
-    for i in range(4):
-        parking_spots[tag_id][i][1] = 600 - parking_spots[tag_id][i][1]
-
-for tag_id in tag_status:
-    trans = tag_status[tag_id]['trans']
-    tag_status[tag_id]['trans'][1] = 6 - trans[1]
+# h_max = np.max([np.asarray(val)[:, 1] for val in parking_spots.values()])
+# for tag_id in parking_spots:
+#     contours = parking_spots[tag_id]
+#     for i in range(4):
+#         parking_spots[tag_id][i][1] = h_max - parking_spots[tag_id][i][1]
+#
+# for tag_id in tag_status:
+#     trans = tag_status[tag_id]['trans']
+#     tag_status[tag_id]['trans'][1] = h_max//100 - trans[1]
 
 
 class Watcher:
-    def __init__(self, map_size=(450, 554), img_size=(1920, 1080), tag_size=0.15):
-        self.map_w = map_size[0]
-        self.map_h = map_size[1]
+    def __init__(self, img_size=(1920, 1080), tag_size=0.15):
+        self.map_w = np.max([np.asarray(val)[:, 0] for val in parking_spots.values()])
+        self.map_h = np.max([np.asarray(val)[:, 1] for val in parking_spots.values()])
 
         self.detector = Detector(families='tag36h11',
                                  nthreads=4,
@@ -147,10 +148,10 @@ class Watcher:
             if spot_id not in self.tag_history:
                 img_show = cv2.fillPoly(img_show, [corners], color_full)
                 img_show = cv2.polylines(
-                    img_show, [corners], False, color_empty, 10)
+                    img_show, [corners], False, color_empty, 20)
             else:
                 img_show = cv2.polylines(
-                    img_show, [corners], False, color_empty, 10)
+                    img_show, [corners], False, color_empty, 20)
         return img_show
 
     def draw_map_with_tags(self):

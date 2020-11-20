@@ -6,7 +6,7 @@ cap = cv2.VideoCapture(0)
 
 _, img_color = cap.read()
 img_h, img_w = img_color.shape[:2]
-watcher = Watcher(map_size=(460, 600), img_size=(img_w, img_h), tag_size=0.16)
+watcher = Watcher(img_size=(img_w, img_h), tag_size=0.16)
 
 while True:
     if cv2.waitKey(1) & 0xFF == 27:

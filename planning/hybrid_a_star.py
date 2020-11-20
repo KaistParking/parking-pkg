@@ -8,28 +8,39 @@ author: Zheng Zh (@Zhengzh)
 
 import heapq
 import math
-import os
-import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial import cKDTree
 
-from dynamic_programming_heuristic import calc_distance_heuristic
-import reeds_shepp_path_planning as rs
-from car import move, check_car_collision, MAX_STEER, WB, plot_car
+from planning.dynamic_programming_heuristic import calc_distance_heuristic
+import planning.reeds_shepp_path_planning as rs
+from planning.car import move, check_car_collision, MAX_STEER, WB, plot_car
 
-XY_GRID_RESOLUTION = 2.0  # [m]
-YAW_GRID_RESOLUTION = np.deg2rad(15.0)  # [rad]
+# XY_GRID_RESOLUTION = 2.0  # [m]
+# YAW_GRID_RESOLUTION = np.deg2rad(15.0)  # [rad]
+# MOTION_RESOLUTION = 0.1  # [m] path interpolate resolution
+# N_STEER = 20  # number of steer command
+# VR = 1.0  # robot radius
+#
+# SB_COST = 100.0  # switch back penalty cost
+# BACK_COST = 5.0  # backward penalty cost
+# STEER_CHANGE_COST = 5.0  # steer angle change penalty cost
+# STEER_COST = 1.0  # steer angle change penalty cost
+# H_COST = 5.0  # Heuristic cost
+
+XY_GRID_RESOLUTION = 0.2  # [m]
+YAW_GRID_RESOLUTION = np.deg2rad(15)  # [rad]
 MOTION_RESOLUTION = 0.1  # [m] path interpolate resolution
 N_STEER = 20  # number of steer command
-VR = 1.0  # robot radius
+VR = 0.8  # robot radius
 
-SB_COST = 100.0  # switch back penalty cost
+SB_COST = 500.0  # switch back penalty cost
 BACK_COST = 5.0  # backward penalty cost
-STEER_CHANGE_COST = 5.0  # steer angle change penalty cost
-STEER_COST = 1.0  # steer angle change penalty cost
+STEER_CHANGE_COST = 50.0  # steer angle change penalty cost
+STEER_COST = 10.0  # steer angle change penalty cost
 H_COST = 5.0  # Heuristic cost
+
 
 show_animation = False
 
@@ -241,7 +252,12 @@ def calc_rs_path_cost(reed_shepp_path):
     return cost
 
 
-def hybrid_a_star_planning(start, goal, ox, oy, xy_resolution, yaw_resolution):
+config = None
+obstacle_kd_tree = None
+h_dp = None
+
+
+def hybrid_a_star_planning(start, goal, ox, oy, xy_resolution=XY_GRID_RESOLUTION, yaw_resolution=YAW_GRID_RESOLUTION):
     """
     start: start node
     goal: goal node
@@ -250,13 +266,16 @@ def hybrid_a_star_planning(start, goal, ox, oy, xy_resolution, yaw_resolution):
     xy_resolution: grid resolution [m]
     yaw_resolution: yaw angle resolution [rad]
     """
+    global config, obstacle_kd_tree, h_dp
 
     start[2], goal[2] = rs.pi_2_pi(start[2]), rs.pi_2_pi(goal[2])
     tox, toy = ox[:], oy[:]
 
-    obstacle_kd_tree = cKDTree(np.vstack((tox, toy)).T)
+    if obstacle_kd_tree is None:
+        obstacle_kd_tree = cKDTree(np.vstack((tox, toy)).T)
 
-    config = Config(tox, toy, xy_resolution, yaw_resolution)
+    if config is None:
+        config = Config(tox, toy, xy_resolution, yaw_resolution)
 
     start_node = Node(round(start[0] / xy_resolution),
                       round(start[1] / xy_resolution),
@@ -269,9 +288,10 @@ def hybrid_a_star_planning(start, goal, ox, oy, xy_resolution, yaw_resolution):
 
     openList, closedList = {}, {}
 
-    h_dp = calc_distance_heuristic(
-        goal_node.x_list[-1], goal_node.y_list[-1],
-        ox, oy, xy_resolution, VR)
+    if h_dp is None:
+        h_dp = calc_distance_heuristic(
+            goal_node.x_list[-1], goal_node.y_list[-1],
+            ox, oy, xy_resolution, VR)
 
     pq = []
     openList[calc_index(start_node, config)] = start_node

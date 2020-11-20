@@ -4,23 +4,8 @@ import time
 import matplotlib.pyplot as plt
 import math
 
-import hybrid_a_star as astar
-import model_predictive_speed_and_steer_control as mpc
+import control.model_predictive_speed_and_steer_control as mpc
 
-'''
-Properties (Planner)
-'''
-XY_GRID_RESOLUTION = 2.0  # [m]
-YAW_GRID_RESOLUTION = np.deg2rad(15.0)  # [rad]
-MOTION_RESOLUTION = 0.5  # [m] path interpolate resolution
-N_STEER = 20  # number of steer command
-VR = 1.0  # robot radius
-
-SB_COST = 100.0  # switch back penalty cost
-BACK_COST = 5.0  # backward penalty cost
-STEER_CHANGE_COST = 5.0  # steer angle change penalty cost
-STEER_COST = 1.0  # steer angle change penalty cost
-H_COST = 5.0  # Heuristic cost
 
 '''
 Properties (Follower)
