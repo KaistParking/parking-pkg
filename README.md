@@ -20,3 +20,11 @@ python test_planning.py
 
 
 
+## 3. Path Tracking(Following)
+
+> __3-1) Quick Test__
+
+~~~python
+python test_control.py
+~~~
+

@@ -6,49 +6,86 @@ import matplotlib.pyplot as plt
 import cvxpy
 import math
 import numpy as np
-import sys
 
-try:
-    import cubic_spline_planner
-except:
-    import mpc.cubic_spline_planner
+from control import cubic_spline_planner
+
+import warnings
+warnings.filterwarnings(action='ignore')
 
 NX = 4  # x = x, y, v, yaw
 NU = 2  # a = [accel, steer]
 T = 5  # horizon length
+
+MAX_TIME = 500.0  # max simulation time
+
+# # mpc parameters
+# R = np.diag([0.01, 0.01])  # input cost matrix
+# Rd = np.diag([0.01, 1.0])  # input difference cost matrix
+# Q = np.diag([1.0, 1.0, 0.5, 0.5])  # state cost matrix
+# Qf = Q  # state final matrix
+# GOAL_DIS = 1.5  # goal distance
+# STOP_SPEED = 0.5 / 3.6  # stop speed
+# MAX_TIME = 500.0  # max simulation time
+#
+# # iterative paramter
+# MAX_ITER = 3  # Max iteration
+# DU_TH = 0.1  # iteration finish param
+#
+# TARGET_SPEED = 10.0 / 3.6  # [m/s] target speed
+# N_IND_SEARCH = 10  # Search index number
+#
+# DT = 0.2  # [s] time tick
+#
+# # Vehicle parameters
+# LENGTH = 4.5  # [m]
+# WIDTH = 2.0  # [m]
+# BACKTOWHEEL = 1.0  # [m]
+# WHEEL_LEN = 0.3  # [m]
+# WHEEL_WIDTH = 0.2  # [m]
+# TREAD = 0.7  # [m]
+# WB = 2.5  # [m]
+#
+# MAX_STEER = np.deg2rad(45.0)  # maximum steering angle [rad]
+# MAX_DSTEER = np.deg2rad(30.0)  # maximum steering speed [rad/s]
+# MAX_SPEED = 55.0 / 3.6  # maximum speed [m/s]
+# MIN_SPEED = -20.0 / 3.6  # minimum speed [m/s]
+# MAX_ACCEL = 1.0  # maximum accel [m/ss]
+
 
 # mpc parameters
 R = np.diag([0.01, 0.01])  # input cost matrix
 Rd = np.diag([0.01, 1.0])  # input difference cost matrix
 Q = np.diag([1.0, 1.0, 0.5, 0.5])  # state cost matrix
 Qf = Q  # state final matrix
-GOAL_DIS = 1.5  # goal distance
-STOP_SPEED = 0.5 / 3.6  # stop speed
-MAX_TIME = 500.0  # max simulation time
+
+GOAL_DIS = 0.05  # goal distance
+STOP_SPEED = 0.05  # stop speed
+GOAL_ANGLE = np.deg2rad(1)
 
 # iterative paramter
 MAX_ITER = 3  # Max iteration
 DU_TH = 0.1  # iteration finish param
 
-TARGET_SPEED = 10.0 / 3.6  # [m/s] target speed
+TARGET_SPEED = 0.5  # [m/s] target speed
 N_IND_SEARCH = 10  # Search index number
 
 DT = 0.2  # [s] time tick
 
 # Vehicle parameters
-LENGTH = 4.5  # [m]
-WIDTH = 2.0  # [m]
-BACKTOWHEEL = 1.0  # [m]
-WHEEL_LEN = 0.3  # [m]
-WHEEL_WIDTH = 0.2  # [m]
-TREAD = 0.7  # [m]
-WB = 2.5  # [m]
+LENGTH = 1.3  # [m]
+WIDTH = 0.6  # [m]
+BACKTOWHEEL = 0.25  # [m]
+WHEEL_LEN = 0.2  # [m]
+WHEEL_WIDTH = 0.08  # [m]
+TREAD = 0.20  # [m]
+WB = 0.8  # [m]
 
-MAX_STEER = np.deg2rad(45.0)  # maximum steering angle [rad]
-MAX_DSTEER = np.deg2rad(30.0)  # maximum steering speed [rad/s]
-MAX_SPEED = 55.0 / 3.6  # maximum speed [m/s]
-MIN_SPEED = -20.0 / 3.6  # minimum speed [m/s]
-MAX_ACCEL = 1.0  # maximum accel [m/ss]
+MAX_STEER = np.deg2rad(35.0)  # maximum steering angle [rad]
+MAX_DSTEER = np.deg2rad(15.0)  # maximum steering speed [rad/s]
+MAX_SPEED = 1.5  # maximum speed [m/s]
+MIN_SPEED = -1.5  # minimum speed [m/s]
+MAX_ACCEL = 0.5  # maximum accel [m/ss]
+
 
 show_animation = False
 
@@ -100,7 +137,7 @@ def get_linear_model_matrix(v, phi, delta):
     return A, B, C
 
 
-def plot_car(x, y, yaw, steer=0.0, cabcolor="-r", truckcolor="-k"):  # pragma: no cover
+def plot_car(x, y, yaw, steer=0.0, cabcolor="-r", truckcolor="-k", ax=plt.gca()):  # pragma: no cover
 
     outline = np.array([[-BACKTOWHEEL, (LENGTH - BACKTOWHEEL), (LENGTH - BACKTOWHEEL), -BACKTOWHEEL, -BACKTOWHEEL],
                         [WIDTH / 2, WIDTH / 2, - WIDTH / 2, -WIDTH / 2, WIDTH / 2]])
@@ -144,30 +181,30 @@ def plot_car(x, y, yaw, steer=0.0, cabcolor="-r", truckcolor="-k"):  # pragma: n
     rl_wheel[0, :] += x
     rl_wheel[1, :] += y
 
-    plt.plot(np.array(outline[0, :]).flatten(),
-             np.array(outline[1, :]).flatten(), truckcolor)
-    plt.plot(np.array(fr_wheel[0, :]).flatten(),
-             np.array(fr_wheel[1, :]).flatten(), truckcolor)
-    plt.plot(np.array(rr_wheel[0, :]).flatten(),
-             np.array(rr_wheel[1, :]).flatten(), truckcolor)
-    plt.plot(np.array(fl_wheel[0, :]).flatten(),
-             np.array(fl_wheel[1, :]).flatten(), truckcolor)
-    plt.plot(np.array(rl_wheel[0, :]).flatten(),
-             np.array(rl_wheel[1, :]).flatten(), truckcolor)
-    plt.plot(x, y, "*")
+    ax.plot(np.array(outline[0, :]).flatten(),
+            np.array(outline[1, :]).flatten(), truckcolor)
+    ax.plot(np.array(fr_wheel[0, :]).flatten(),
+            np.array(fr_wheel[1, :]).flatten(), truckcolor)
+    ax.plot(np.array(rr_wheel[0, :]).flatten(),
+            np.array(rr_wheel[1, :]).flatten(), truckcolor)
+    ax.plot(np.array(fl_wheel[0, :]).flatten(),
+            np.array(fl_wheel[1, :]).flatten(), truckcolor)
+    ax.plot(np.array(rl_wheel[0, :]).flatten(),
+            np.array(rl_wheel[1, :]).flatten(), truckcolor)
+    ax.plot(x, y, "*")
 
 
-def update_state(state, a, delta):
+def update_state(state, a, delta, dt=DT):
     # input check
     if delta >= MAX_STEER:
         delta = MAX_STEER
     elif delta <= -MAX_STEER:
         delta = -MAX_STEER
 
-    state.x = state.x + state.v * math.cos(state.yaw) * DT
-    state.y = state.y + state.v * math.sin(state.yaw) * DT
-    state.yaw = state.yaw + state.v / WB * math.tan(delta) * DT
-    state.v = state.v + a * DT
+    state.x = state.x + state.v * math.cos(state.yaw) * dt
+    state.y = state.y + state.v * math.sin(state.yaw) * dt
+    state.yaw = state.yaw + state.v / WB * math.tan(delta) * dt
+    state.v = state.v + a * dt
 
     if state.v > MAX_SPEED:
         state.v = MAX_SPEED
@@ -297,7 +334,7 @@ def linear_mpc_control(xref, xbar, x0, dref):
     return oa, odelta, ox, oy, oyaw, ov
 
 
-def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
+def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind, dt=DT):
     xref = np.zeros((NX, T + 1))
     dref = np.zeros((1, T + 1))
     ncourse = len(cx)
@@ -316,7 +353,7 @@ def calc_ref_trajectory(state, cx, cy, cyaw, ck, sp, dl, pind):
     travel = 0.0
 
     for i in range(T + 1):
-        travel += abs(state.v) * DT
+        travel += abs(state.v) * dt
         dind = int(round(travel / dl))
 
         if (ind + dind) < ncourse:
@@ -347,8 +384,9 @@ def check_goal(state, goal, tind, nind):
         isgoal = False
 
     isstop = (abs(state.v) <= STOP_SPEED)
+    isdirection = (abs(goal[2] - state.yaw) <= GOAL_ANGLE)
 
-    if isgoal and isstop:
+    if isgoal and isstop and isdirection:
         return True
 
     return False
