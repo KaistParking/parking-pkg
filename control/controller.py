@@ -32,7 +32,8 @@ class Controller:
         self.target_ind = None
         self.odelta = None
         self.oa = None
-        self.init_path(copy.deepcopy(path))
+        if path is not None:
+            self.init_path(copy.deepcopy(path))
 
     def init_path(self, path):
         self.plan_x = path.x_list

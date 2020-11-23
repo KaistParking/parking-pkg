@@ -162,3 +162,17 @@ class Watcher:
             cv2.putText(img_show, str(tag_id), pos,
                         cv2.FONT_HERSHEY_SCRIPT_SIMPLEX, 1, (0, 255, 0), 4)
         return img_show
+
+    def find_empty_spots(self):
+        empty_spots = []
+        for spot_id, corners in parking_spots.items():
+            if spot_id in self.tag_history:
+                corners = np.asarray(corners, np.float)
+                v = (corners[0] + corners[-1]) - (corners[1] + corners[2])
+                v = v / np.linalg.norm(v)
+                yaw = np.arccos(v[0]) if v[1] > 0 else -np.arccos(v[0])
+                xy = [np.mean(corners[:, 0]), np.mean(corners[:, 1]), yaw]
+                empty_spots.append(xy)
+        return np.array(empty_spots)
+
+
