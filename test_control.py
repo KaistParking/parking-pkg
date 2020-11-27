@@ -28,14 +28,16 @@ map_planning[np.where(map_planning != 255)] = 0
 # planning (m)
 planner = Planner(map_planning, meter_scale=0.01/0.1)
 start = [4.1, 0.3, np.deg2rad(90)]
-end = [1.35, 4.2, np.deg2rad(90)]
+# end = [1.35, 4.2, np.deg2rad(90)]
+end = [1.35, 4.6, np.deg2rad(-90)]
 path = planner.plan_path(start, end)
 planner.show_path()
 plt.show()
 
 # control
 map_shape = map_color.shape
-car = Controller(path=path, map_color=map_color, map_size=(map_shape[1]/100, map_shape[0]/100))
+car = Controller(path=path, map_color=map_color,
+                 map_size=(map_shape[1]/100, map_shape[0]/100))
 
 plt.gcf().canvas.mpl_connect('key_release_event',
                              lambda event: [exit(0) if event.key == 'escape' else None])
@@ -63,7 +65,8 @@ plt.show()
 print('end')
 
 fourcc = cv2.VideoWriter_fourcc('D', 'I', 'V', 'X')
-out = cv2.VideoWriter('results/{}.avi'.format(results_idx), fourcc, 10.0, (map_shape[1], map_shape[0]))
+out = cv2.VideoWriter('results/{}.avi'.format(results_idx),
+                      fourcc, 10.0, (map_shape[1], map_shape[0]))
 for i in tqdm(range(img_idx), desc='video'):
     img = cv2.imread('{}/{}.jpg'.format(results_dir, i))
     cv2.imshow('img', img)
