@@ -29,11 +29,13 @@ from planning.car import move, check_car_collision, MAX_STEER, WB, plot_car
 # STEER_COST = 1.0  # steer angle change penalty cost
 # H_COST = 5.0  # Heuristic cost
 
-XY_GRID_RESOLUTION = 0.2  # [m]
+XY_GRID_RESOLUTION = 0.25  # [m]
 YAW_GRID_RESOLUTION = np.deg2rad(15)  # [rad]
-MOTION_RESOLUTION = 0.1  # [m] path interpolate resolution
+# MOTION_RESOLUTION = 0.1  # [m] path interpolate resolution
+MOTION_RESOLUTION = 0.25  # [m] path interpolate resolution
 N_STEER = 20  # number of steer command
-VR = 0.8  # robot radius
+# VR = 0.8  # robot radius
+VR = 0.01
 
 SB_COST = 500.0  # switch back penalty cost
 BACK_COST = 5.0  # backward penalty cost

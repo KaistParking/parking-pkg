@@ -28,8 +28,7 @@ map_planning[np.where(map_planning != 255)] = 0
 # planning (m)
 planner = Planner(map_planning, meter_scale=0.01/0.1)
 start = [4.1, 0.3, np.deg2rad(90)]
-# end = [1.35, 4.2, np.deg2rad(90)]
-end = [1.35, 4.6, np.deg2rad(-90)]
+end = [1.35, 4.2, np.deg2rad(90)]
 path = planner.plan_path(start, end)
 planner.show_path()
 plt.show()

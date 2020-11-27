@@ -63,8 +63,10 @@ STOP_SPEED = 0.05  # stop speed
 GOAL_ANGLE = np.deg2rad(1)
 
 # iterative paramter
-MAX_ITER = 3  # Max iteration
-DU_TH = 0.1  # iteration finish param
+# MAX_ITER = 3  # Max iteration
+# DU_TH = 0.1  # iteration finish param
+MAX_ITER = 2  # Max iteration
+DU_TH = 0.2  # iteration finish param
 
 TARGET_SPEED = 0.5  # [m/s] target speed
 N_IND_SEARCH = 10  # Search index number

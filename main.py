@@ -16,6 +16,7 @@ warnings.filterwarnings(action='ignore')
 car_id = 0  # car tag_id
 HOST = '127.0.0.1'
 PORT = 9999
+use_bluetooth = False
 
 results_dir = 'results'
 results_idx = 0
@@ -26,13 +27,14 @@ os.mkdir(results_dir)
 
 
 def init_modules():
+    ratio = 0.1
     # draw map
-    watcher_ = Watcher()
+    watcher_ = Watcher(img_size=(1920, 1080), tag_size=0.16)
     map_color = watcher_.draw_map(color_full=(255, 255, 255), color_empty=(0, 0, 0))
-    map_planning = cv2.resize(map_color, dsize=(0, 0), fx=0.1, fy=0.1)
+    map_planning = cv2.resize(map_color, dsize=(0, 0), fx=ratio, fy=ratio)
     map_planning[np.where(map_planning != 255)] = 0
     # planning (m)
-    planner_ = Planner(map_planning, meter_scale=0.01/0.1)
+    planner_ = Planner(map_planning, meter_scale=0.01/ratio)
     # control
     map_shape = map_color.shape
     car_ = Controller(path=None, map_color=map_color, map_size=(map_shape[1]/100, map_shape[0]/100))
@@ -58,7 +60,7 @@ def estimate_vel(pose_in: np.ndarray):
         return 0.
     else:
         diff = pose_in - past_pose
-        diff_norm = np.lingalg.norm(diff)
+        diff_norm = np.linalg.norm(diff)
         dt = time.time() - past_time
         past_pose = pose_in.copy()
         past_time = time.time()
@@ -69,7 +71,7 @@ def estimate_vel(pose_in: np.ndarray):
 watcher, planner, car = init_modules()
 
 # start communication
-client = Client(host=HOST, port=PORT)
+client = Client(host=HOST, port=PORT, use_bluetooth=use_bluetooth)
 
 # find empty spots
 empty_spots = []
@@ -78,8 +80,7 @@ while len(empty_spots) == 0:
     _ = watcher.watch(img_color)
     empty_spots = watcher.find_empty_spots()
     time.sleep(0.01)
-
-goal = empty_spots[0]
+goal = empty_spots[6] if len(empty_spots) >= 7 else empty_spots[0]
 
 # find path & control
 img_idx = 0
@@ -92,14 +93,16 @@ while True:
             break
 
         tag_poses = watcher.watch(img_color)
-        if tag_poses is None:
+        if tag_poses is None or car_id not in tag_poses:
             continue
-        trans, rot = tag_poses[car_id]['trans'], tag_poses[car_id]['rot']
-        pose = [trans[0], trans[1], vec2yaw(rot)]
+        trans, yaw = tag_poses[car_id]['trans'], tag_poses[car_id]['rot']
+        pose = [trans[0], trans[1], yaw]
         path = planner.plan_path(pose, goal)
+
     if len(path.x_list) < 5:
         break
 
+    car.map_color = watcher.draw_map(color_full=(100, 100, 100), color_empty=(0, 0, 0))
     car.init_path(path)
     while not car.check_goal() and not (len(car.v) > 10 and np.mean(np.abs(car.v[-10:])) < 0.1):
         img_color = client.receive()
@@ -107,14 +110,15 @@ while True:
         if cv2.waitKey(1) & 0xFF == 27:
             break
         tag_poses = watcher.watch(img_color)
-        if tag_poses is None:
+        if tag_poses is None or car_id not in tag_poses:
             continue
-        trans, rot = tag_poses[car_id]['trans'], tag_poses[car_id]['rot']
-        pose = np.array([trans[0], trans[1], vec2yaw(rot)])
+        trans, yaw = tag_poses[car_id]['trans'], tag_poses[car_id]['rot']
+        pose = np.array([trans[0], trans[1], yaw])
 
         state = car.update_pose(pose=pose, v=estimate_vel(pose[:2]))
         steer, accel = car.estimate_control(state=state)
-        client.send_bluetooth_control('{},{}'.format(steer, accel))
+        if use_bluetooth:
+            client.send_bluetooth_control('{},{}'.format(steer, accel))
 
         car.show(ax=plt.gca())
         plt.savefig('{}/{}.jpg'.format(results_dir, img_idx))
