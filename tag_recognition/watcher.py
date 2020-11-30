@@ -5,13 +5,14 @@ from scipy.spatial.transform import Rotation
 from pupil_apriltags import Detector
 
 # c920 params
-fx = 646.47368
-fy = 645.33399
-cx = 298.07274 * 1920/640
-cy = 231.63218 * 1080/480
-param = [fx, fy, cx, cy]
+# fx = 646.47368
+# fy = 645.33399
+# cx = 298.07274 * 1920/640
+# cy = 231.63218 * 1080/480
+# param = [fx, fy, cx, cy]
 # param = [686.42860, 687.41792, 740.56855, 624.89619]
 # param = [686.42860, 687.41792, 740.56855, 624.89619]
+param = [1444.30087, 1447.86206, 959.50000, 539.50000]
 
 parking_spots = {
     1: [[268, 152], [267, 0], [358, 0], [356, 153]],
