@@ -1,3 +1,4 @@
+import serial
 from bluetooth import *
 import numpy as np
 import cv2
@@ -14,9 +15,16 @@ from communication.server import Client
 import warnings
 warnings.filterwarnings(action='ignore')
 
-client_socket = BluetoothSocket(RFCOMM)
-client_socket.connect(("98:d3:31:fd:3e:0d", 1))
-print("connected")
+
+ser = serial.Serial(
+    port='/dev/cu.usbmodem141201',
+    baudrate=9600,
+)
+
+
+# client_socket = BluetoothSocket(RFCOMM)
+# client_socket.connect(("98:d3:31:fd:3e:0d", 1))
+# print("connected")
 
 car_id = 0  # car tag_id
 HOST = '127.0.0.1'
@@ -144,7 +152,8 @@ while True:
                 '{},{}'.format(str(steer), str(accel)))
             print('{},{}'.format(steer, accel))
         msg = str('{},{}'.format(str(steer), str(accel)))
-        client_socket.send(msg.encode(encoding="utf-8"))
+        # client_socket.send(msg.encode(encoding="utf-8"))
+        ser.write(msg.encode())
 
         car.show(ax=plt.gca())
         plt.savefig('{}/{}.jpg'.format(results_dir, img_idx))
