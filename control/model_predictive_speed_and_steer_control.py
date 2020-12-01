@@ -58,9 +58,9 @@ Rd = np.diag([0.01, 1.0])  # input difference cost matrix
 Q = np.diag([1.0, 1.0, 0.5, 0.5])  # state cost matrix
 Qf = Q  # state final matrix
 
-GOAL_DIS = 0.05  # goal distance
+GOAL_DIS = 0.1  # goal distance
 STOP_SPEED = 0.05  # stop speed
-GOAL_ANGLE = np.deg2rad(1)
+GOAL_ANGLE = np.deg2rad(5)
 
 # iterative paramter
 # MAX_ITER = 3  # Max iteration
@@ -68,7 +68,7 @@ GOAL_ANGLE = np.deg2rad(1)
 MAX_ITER = 2  # Max iteration
 DU_TH = 0.2  # iteration finish param
 
-TARGET_SPEED = 0.5  # [m/s] target speed
+TARGET_SPEED = 10.0  # [m/s] target speed
 N_IND_SEARCH = 10  # Search index number
 
 DT = 0.2  # [s] time tick
@@ -84,9 +84,9 @@ WB = 0.8  # [m]
 
 MAX_STEER = np.deg2rad(35.0)  # maximum steering angle [rad]
 MAX_DSTEER = np.deg2rad(15.0)  # maximum steering speed [rad/s]
-MAX_SPEED = 1.5  # maximum speed [m/s]
-MIN_SPEED = -1.5  # minimum speed [m/s]
-MAX_ACCEL = 0.5  # maximum accel [m/ss]
+MAX_SPEED = 10.0  # maximum speed [m/s]
+MIN_SPEED = -10.0  # minimum speed [m/s]
+MAX_ACCEL = 5.0  # maximum accel [m/ss]
 
 
 show_animation = False

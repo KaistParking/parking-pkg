@@ -13,6 +13,7 @@ from pupil_apriltags import Detector
 # param = [686.42860, 687.41792, 740.56855, 624.89619]
 # param = [686.42860, 687.41792, 740.56855, 624.89619]
 param = [1444.30087, 1447.86206, 959.50000, 539.50000]
+# param = [686.42860, 687.41792, 959.50000, 539.50000]
 
 parking_spots = {
     1: [[268, 152], [267, 0], [358, 0], [356, 153]],
@@ -67,6 +68,9 @@ class Watcher:
         self.tag_poses = None
         self.tag_history = {}
 
+        self.trans_stack = []
+        self.rot_stack = []
+
     def find_camera_frame(self):
         cam_translation = []
         cam_rotation = []
@@ -118,7 +122,16 @@ class Watcher:
         if cam_trans is None:
             return None
         else:
-            self.cam_trans, self.cam_rot = cam_trans, cam_rot
+            self.trans_stack.append(cam_trans)
+            self.rot_stack.append(cam_rot)
+            if len(self.trans_stack) >= 10:
+                self.trans_stack = self.trans_stack[-5:]
+            if len(self.rot_stack) >= 10:
+                self.rot_stack = self.rot_stack[-5:]
+
+            self.cam_trans = np.mean(np.asarray(self.trans_stack), axis=0)
+            self.cam_rot = Rotation.from_matrix(self.rot_stack).mean().as_matrix()
+
             self.tag_poses = self.calculate_tag_pose()
             return self.tag_poses
 
@@ -141,8 +154,8 @@ class Watcher:
                 img_show = cv2.fillPoly(img_show, [corners], color_full)
                 img_show = cv2.polylines(
                     img_show, [corners], False, color_empty, 20)
-                img_show = cv2.line(
-                    img_show, (corners[-1][0], corners[-1][1]), (corners[0][0], corners[0][1]), color_empty, 5)
+                # img_show = cv2.line(
+                #     img_show, (corners[-1][0], corners[-1][1]), (corners[0][0], corners[0][1]), color_empty, 5)
             else:
                 img_show = cv2.polylines(
                     img_show, [corners], False, color_empty, 20)
@@ -157,7 +170,7 @@ class Watcher:
                         cv2.FONT_HERSHEY_SCRIPT_SIMPLEX, 1, (0, 255, 0), 4)
         return img_show
 
-    def find_empty_spots(self):
+    def find_empty_spots_(self):
         empty_spots = []
         for spot_id, corners in parking_spots.items():
             if spot_id in self.tag_history:
@@ -169,4 +182,17 @@ class Watcher:
                 xy = [np.mean(corners[:, 0])/100., np.mean(corners[:, 1])/100., yaw]
                 empty_spots.append(xy)
         return np.array(empty_spots)
+
+    def find_empty_spots(self):
+        empty_spots = {}
+        for spot_id, corners in parking_spots.items():
+            if spot_id in self.tag_history:
+                corners = np.asarray(corners, np.float)
+                v = (corners[0] + corners[-1]) - (corners[1] + corners[2])
+                v = v / np.linalg.norm(v)
+                # yaw = np.arccos(v[0]) if v[1] > 0 else -np.arccos(v[0])
+                yaw = np.arccos(v[0])
+                xy = [np.mean(corners[:, 0])/100., np.mean(corners[:, 1])/100., yaw]
+                empty_spots[spot_id] = np.array(xy)
+        return empty_spots
 

@@ -38,7 +38,7 @@ class Client:
         dec_img = cv2.imdecode(data, 1)
         return dec_img
 
-    def send_bluetooth_control(self, control_in):
+    def send_bluetooth_control(self, control_in: str):
         self.blue_socket.send(control_in.encode(encoding="utf-8"))
 
     def close(self):

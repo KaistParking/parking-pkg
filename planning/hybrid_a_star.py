@@ -32,7 +32,7 @@ from planning.car import move, check_car_collision, MAX_STEER, WB, plot_car
 XY_GRID_RESOLUTION = 0.25  # [m]
 YAW_GRID_RESOLUTION = np.deg2rad(15)  # [rad]
 # MOTION_RESOLUTION = 0.1  # [m] path interpolate resolution
-MOTION_RESOLUTION = 0.25  # [m] path interpolate resolution
+MOTION_RESOLUTION = 0.5  # [m] path interpolate resolution
 N_STEER = 20  # number of steer command
 # VR = 0.8  # robot radius
 VR = 0.01

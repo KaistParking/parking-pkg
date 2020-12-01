@@ -7,8 +7,10 @@ from _thread import *
 enclosure_queue = Queue()
 
 video_path = 'testing/test2.mov'
+# video_path = 1
 HOST = '127.0.0.1'
 # HOST = '143.248.229.64'
+# HOST = '143.248.229.3'
 PORT = 9999
 
 video_ended = False
@@ -53,7 +55,7 @@ def web_cam(queue):
 
             cv2.imshow('hosted image', frame)
 
-            key = cv2.waitKey(1)
+            key = cv2.waitKey(500)
             if key == 27:
                 break
 
