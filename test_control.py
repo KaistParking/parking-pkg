@@ -3,12 +3,20 @@ import cv2
 import matplotlib.pyplot as plt
 import os
 from tqdm import tqdm
-from tag_recognition.watcher import Watcher
-from planning.planner import Planner
-from control.controller import Controller
 
 import warnings
+import sys
+sys.path.append('./src')
 warnings.filterwarnings(action='ignore')
+
+try:
+    from tag_recognition.watcher import Watcher
+    from planning.planner import Planner
+    from control.controller import Controller
+except ImportError:
+    from src.tag_recognition.watcher import Watcher
+    from src.planning.planner import Planner
+    from src.control.controller import Controller
 
 
 results_dir = 'results'

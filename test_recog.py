@@ -1,6 +1,15 @@
 import cv2
 import matplotlib.pyplot as plt
-from tag_recognition.watcher import Watcher
+
+import warnings
+import sys
+sys.path.append('./src')
+warnings.filterwarnings(action='ignore')
+
+try:
+    from tag_recognition.watcher import Watcher
+except ImportError:
+    from src.tag_recognition.watcher import Watcher
 
 # cap = cv2.VideoCapture('testing/parkinglot2.mov')
 cap = cv2.VideoCapture('testing/test2.mov')

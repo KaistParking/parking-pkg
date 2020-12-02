@@ -3,8 +3,17 @@ import cv2
 from scipy.spatial.transform import Rotation
 
 from pupil_apriltags import Detector
+import time
+import matplotlib.pyplot as plt
 
-# c920 params
+try:
+    from tag_recognition.kalman_filters import ExtendedKalmanFilter
+    from tag_recognition.utils import normalize_angles
+except ImportError:
+    from src.tag_recognition.kalman_filters import ExtendedKalmanFilter
+    from src.tag_recognition.utils import normalize_angles
+
+# c920 params - old
 # fx = 646.47368
 # fy = 645.33399
 # cx = 298.07274 * 1920/640
@@ -12,8 +21,13 @@ from pupil_apriltags import Detector
 # param = [fx, fy, cx, cy]
 # param = [686.42860, 687.41792, 740.56855, 624.89619]
 # param = [686.42860, 687.41792, 740.56855, 624.89619]
+
+# c920
 param = [1444.30087, 1447.86206, 959.50000, 539.50000]
 # param = [686.42860, 687.41792, 959.50000, 539.50000]
+
+# drone
+# param = [1090.17316, 1090.67229, 969.14173, 525.16701]
 
 parking_spots = {
     1: [[268, 152], [267, 0], [358, 0], [356, 153]],
@@ -55,7 +69,8 @@ class Watcher:
         self.map_h = np.max([np.asarray(val)[:, 1]
                              for val in parking_spots.values()])
 
-        self.detector = Detector(families='tag36h11', nthreads=4, quad_decimate=1.0)
+        self.detector = Detector(
+            families='tag36h11', nthreads=4, quad_decimate=1.0)
 
         self.img_size = img_size
         self.tag_size = tag_size
@@ -71,6 +86,8 @@ class Watcher:
         self.trans_stack = []
         self.rot_stack = []
 
+        # self.ekf = EKF(initial_pose=np.array([0., 0., 0.]))
+
     def find_camera_frame(self):
         cam_translation = []
         cam_rotation = []
@@ -81,7 +98,8 @@ class Watcher:
 
             # camera translation
             pose_world2cam = tag_status[tag.tag_id]['trans'] - \
-                             np.matmul(np.linalg.inv(tag.pose_R), tag.pose_t[:, 0]) * np.array([1., -1., -1.])
+                np.matmul(np.linalg.inv(tag.pose_R),
+                          tag.pose_t[:, 0]) * np.array([1., -1., -1.])
             cam_translation.append(pose_world2cam)
 
             # camera rotation (base: camera coordinate)
@@ -98,15 +116,20 @@ class Watcher:
         results = {}
         for tag in self.tags:
             # tag translation
-            pose_world2tag = self.cam_trans + np.matmul(self.cam_rot, tag.pose_t[:, 0]) * np.array([1., -1., -1.])
+            pose_world2tag = self.cam_trans + \
+                np.matmul(self.cam_rot,
+                          tag.pose_t[:, 0]) * np.array([1., -1., -1.])
             # tag rotation(yaw)
             # rot_world2tag = Rotation.from_matrix(np.matmul(self.cam_rot, tag.pose_R))
             # tag_yaw = rot_world2tag.as_rotvec()[2]
             tag_yaw = \
-                Rotation.from_matrix(self.cam_rot).as_rotvec()[2] + Rotation.from_matrix(tag.pose_R).as_rotvec()[2]
+                Rotation.from_matrix(self.cam_rot).as_rotvec()[
+                    2] + Rotation.from_matrix(tag.pose_R).as_rotvec()[2]
 
-            results[tag.tag_id] = {'trans': pose_world2tag, 'rot': -tag_yaw + np.pi/2}
-            self.tag_history[tag.tag_id] = {'trans': pose_world2tag, 'rot': -tag_yaw + np.pi/2}
+            results[tag.tag_id] = {
+                'trans': pose_world2tag, 'rot': -tag_yaw + np.pi/2}
+            self.tag_history[tag.tag_id] = {
+                'trans': pose_world2tag, 'rot': -tag_yaw + np.pi/2}
         return results
 
     def watch(self, img_color):
@@ -124,13 +147,16 @@ class Watcher:
         else:
             self.trans_stack.append(cam_trans)
             self.rot_stack.append(cam_rot)
-            if len(self.trans_stack) >= 10:
+            if len(self.trans_stack) >= 5:
                 self.trans_stack = self.trans_stack[-5:]
-            if len(self.rot_stack) >= 10:
+            if len(self.rot_stack) >= 5:
                 self.rot_stack = self.rot_stack[-5:]
 
             self.cam_trans = np.mean(np.asarray(self.trans_stack), axis=0)
-            self.cam_rot = Rotation.from_matrix(self.rot_stack).mean().as_matrix()
+            self.cam_rot = Rotation.from_matrix(
+                self.rot_stack).mean().as_matrix()
+
+            # self.cam_trans = self.ekf.apply(self.cam_trans)
 
             self.tag_poses = self.calculate_tag_pose()
             return self.tag_poses
@@ -156,6 +182,9 @@ class Watcher:
                     img_show, [corners], False, color_empty, 20)
                 # img_show = cv2.line(
                 #     img_show, (corners[-1][0], corners[-1][1]), (corners[0][0], corners[0][1]), color_empty, 5)
+
+                img_show = cv2.line(
+                    img_show, (454, 0), (454, 550), color_empty, 10)
             else:
                 img_show = cv2.polylines(
                     img_show, [corners], False, color_empty, 20)
@@ -179,7 +208,8 @@ class Watcher:
                 v = v / np.linalg.norm(v)
                 # yaw = np.arccos(v[0]) if v[1] > 0 else -np.arccos(v[0])
                 yaw = np.arccos(v[0])
-                xy = [np.mean(corners[:, 0])/100., np.mean(corners[:, 1])/100., yaw]
+                xy = [np.mean(corners[:, 0])/100.,
+                      np.mean(corners[:, 1])/100., yaw]
                 empty_spots.append(xy)
         return np.array(empty_spots)
 
@@ -192,7 +222,115 @@ class Watcher:
                 v = v / np.linalg.norm(v)
                 # yaw = np.arccos(v[0]) if v[1] > 0 else -np.arccos(v[0])
                 yaw = np.arccos(v[0])
-                xy = [np.mean(corners[:, 0])/100., np.mean(corners[:, 1])/100., yaw]
+                xy = [np.mean(corners[:, 0])/100.,
+                      np.mean(corners[:, 1])/100., yaw]
                 empty_spots[spot_id] = np.array(xy)
         return empty_spots
+
+
+class EKF:
+    def __init__(self, initial_pose,
+                 xy_obs_noise_std=5.0,
+                 initial_yaw_std=np.pi,
+                 forward_velocity_noise_std=0.5,
+                 yaw_rate_noise_std=0.5):
+
+        # initial state
+        self.initial_yaw_std = np.pi
+        self.initial_yaw = initial_pose[2]
+        self.x = initial_pose.copy()
+
+        # covariance for initial state estimation error (Sigma_0)
+        self.P = np.array([
+            [xy_obs_noise_std ** 2., 0., 0.],
+            [0., xy_obs_noise_std ** 2., 0.],
+            [0., 0., initial_yaw_std ** 2.]
+        ])
+
+        # Prepare measurement error covariance Q
+        self.Q = np.array([
+            [xy_obs_noise_std ** 2., 0.],
+            [0., xy_obs_noise_std ** 2.]
+        ])
+
+        # Prepare state transition noise covariance R
+        self.R = np.array([
+            [forward_velocity_noise_std ** 2., 0., 0.],
+            [0., forward_velocity_noise_std ** 2., 0.],
+            [0., 0., yaw_rate_noise_std ** 2.]
+        ])
+
+        # initialize Kalman filter
+        self.kf = ExtendedKalmanFilter(self.x, self.P)
+
+        # array to store estimated 2d pose [x, y, theta]
+        self.mu_x = [self.x[0], ]
+        self.mu_y = [self.x[1], ]
+        self.mu_theta = [self.x[2], ]
+
+        # array to store estimated error variance of 2d pose
+        self.var_x = [self.P[0, 0], ]
+        self.var_y = [self.P[1, 1], ]
+        self.var_theta = [self.P[2, 2], ]
+
+        self.times = [time.time(), ]
+        self.pose_last = initial_pose.copy()
+        self.obs_poses = [initial_pose.copy(), ]
+
+    def apply(self, pose):
+        t = time.time()
+        dt = t - self.times[-1]
+
+        # get control input `u = [v, omega] + noise`
+        obs_forward_velocities = np.linalg.norm(pose[:2] - self.pose_last[:2]) / dt
+        obs_yaw_rates = (pose[2] - self.pose_last[2]) / dt
+        u = np.array([
+            obs_forward_velocities,
+            obs_yaw_rates
+        ])
+
+        # propagate!
+        R_ = self.R * (dt ** 2.)
+        self.kf.propagate(u, dt, R_)
+
+        # get measurement `z = [x, y] + noise`
+        z = np.array([
+            pose[0],
+            pose[1]
+        ])
+
+        # update!
+        self.kf.update(z, self.Q)
+
+        # save estimated state to analyze later
+        self.mu_x.append(self.kf.x[0])
+        self.mu_y.append(self.kf.x[1])
+        self.mu_theta.append(normalize_angles(self.kf.x[2]))
+
+        # save estimated variance to analyze later
+        self.var_x.append(self.kf.P[0, 0])
+        self.var_y.append(self.kf.P[1, 1])
+        self.var_theta.append(self.kf.P[2, 2])
+
+        self.pose_last = pose.copy()
+        self.times.append(t)
+        self.obs_poses.append(pose.copy())
+
+        return np.array([self.mu_x[-1], self.mu_y[-1], self.mu_theta[-1]])
+
+    def show_results(self, ax=plt.gca()):
+        obs_poses = np.array(self.obs_poses)[10:]
+        mu_x = np.array(self.mu_x)[10:]
+        mu_y = np.array(self.mu_y)[10:]
+
+        ax.set_title("EKF: Position Evaluation")
+        ax.plot(obs_poses[:, 0], obs_poses[:, 1], lw=1, color='b', markersize=3, alpha=0.4, label='observed')
+        ax.plot(mu_x, mu_y, lw=1, label='estimated', color='r')
+        ax.set_xlabel('X [m]')
+        ax.set_ylabel('Y [m]')
+        ax.legend()
+        ax.axis("equal")
+
+
+
 

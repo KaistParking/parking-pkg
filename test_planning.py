@@ -1,11 +1,18 @@
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
-from tag_recognition.watcher import Watcher
-from planning.planner import Planner
 
 import warnings
+import sys
+sys.path.append('./src')
 warnings.filterwarnings(action='ignore')
+
+try:
+    from tag_recognition.watcher import Watcher
+    from planning.planner import Planner
+except ImportError:
+    from src.tag_recognition.watcher import Watcher
+    from src.planning.planner import Planner
 
 # draw map
 watcher = Watcher()

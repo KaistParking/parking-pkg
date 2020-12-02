@@ -7,10 +7,8 @@ import cvxpy
 import math
 import numpy as np
 
-from control import cubic_spline_planner
+from src.control import cubic_spline_planner
 
-import warnings
-warnings.filterwarnings(action='ignore')
 
 NX = 4  # x = x, y, v, yaw
 NU = 2  # a = [accel, steer]
@@ -62,7 +60,8 @@ GOAL_DIS = 0.1  # goal distance
 STOP_SPEED = 0.05  # stop speed
 GOAL_ANGLE = np.deg2rad(5)
 
-# iterative paramter
+
+# iterative parameter
 # MAX_ITER = 3  # Max iteration
 # DU_TH = 0.1  # iteration finish param
 MAX_ITER = 2  # Max iteration
@@ -303,7 +302,7 @@ def linear_mpc_control(xref, xbar, x0, dref):
 
         A, B, C = get_linear_model_matrix(
             xbar[2, t], xbar[3, t], dref[0, t])
-        constraints += [x[:, t + 1] == A * x[:, t] + B * u[:, t] + C]
+        constraints += [x[:, t + 1] == A @ x[:, t] + B @ u[:, t] + C]
 
         if t < (T - 1):
             cost += cvxpy.quad_form(u[:, t + 1] - u[:, t], Rd)

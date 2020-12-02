@@ -4,7 +4,7 @@ import time
 import matplotlib.pyplot as plt
 import math
 
-import control.model_predictive_speed_and_steer_control as mpc
+import src.control.model_predictive_speed_and_steer_control as mpc
 import copy
 
 
@@ -108,7 +108,7 @@ class Controller:
         return mpc.check_goal(self.state, self.goal, self.target_ind, len(self.plan_x))
 
     def show(self, ax=plt.gca()):
-        plt.title("Time[s]: {}s, speed[km/h]: {}m/s".format(
+        ax.set_title("Time[s]: {}s, speed[km/h]: {}m/s".format(
             round(self.times[-1] - self.times[0], 2), round(self.v[-1], 2)))
 
         ax.imshow(cv2.flip(self.map_color, 0), extent=[0, self.map_w, 0, self.map_h])

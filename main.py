@@ -1,179 +1,230 @@
-import serial
-from bluetooth import *
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 import os
-from tqdm import tqdm
-import time
 
-from tag_recognition.watcher import Watcher
-from planning.planner import Planner
-from control.controller import Controller
-from communication.server import Client
+import time
+import socket
+from datetime import datetime
+import argparse
 
 import warnings
+import sys
+sys.path.append('./src')
 warnings.filterwarnings(action='ignore')
 
-
-ser = serial.Serial(
-    port='/dev/cu.usbmodem141201',
-    baudrate=9600,
-)
-
-
-# client_socket = BluetoothSocket(RFCOMM)
-# client_socket.connect(("98:d3:31:fd:3e:0d", 1))
-# print("connected")
-
-car_id = 0  # car tag_id
-HOST = '127.0.0.1'
-# HOST = '143.248.219.115'
-# HOST = '192.168.1.101'
-# HOST = '192.249.28.97'
-PORT = 9999
-use_bluetooth = False
-
-results_dir = 'results'
-results_idx = 0
-while os.path.isdir(os.path.join(results_dir, str(results_idx))):
-    results_idx += 1
-results_dir = os.path.join(results_dir, str(results_idx))
-os.mkdir(results_dir)
+try:
+    from tag_recognition.watcher import Watcher, EKF
+    from planning.planner import Planner
+    from control.controller import Controller
+    from communication.server import Client
+except ImportError:
+    from src.tag_recognition.watcher import Watcher, EKF
+    from src.planning.planner import Planner
+    from src.control.controller import Controller
+    from src.communication.server import Client
 
 
-def init_modules():
-    ratio = 0.08
+watcher, planner, controller = None, None, None
+client = None
+
+ekf = None
+
+
+def init_modules(map2planning_ratio=0.08):
+    global watcher, planner, controller
     # draw map
-    watcher_ = Watcher(img_size=(1920, 1080), tag_size=0.16)
-    map_color = watcher_.draw_map(color_full=(
+    watcher = Watcher(img_size=(1920, 1080), tag_size=0.16)
+    map_color = watcher.draw_map(color_full=(
         255, 255, 255), color_empty=(0, 0, 0))
-    map_planning = cv2.resize(map_color, dsize=(0, 0), fx=ratio, fy=ratio)
+    map_planning = cv2.resize(map_color, dsize=(
+        0, 0), fx=map2planning_ratio, fy=map2planning_ratio)
     map_planning[np.where(map_planning != 255)] = 0
     # planning (m)
-    planner_ = Planner(map_planning, meter_scale=0.01/ratio)
+    planner = Planner(map_planning, meter_scale=0.01/map2planning_ratio)
     # control
     map_shape = map_color.shape
-    car_ = Controller(path=None, map_color=map_color,
-                      map_size=(map_shape[1]/100, map_shape[0]/100))
-    return watcher_, planner_, car_
+    controller = Controller(path=None, map_color=map_color,
+                            map_size=(map_shape[1]/100, map_shape[0]/100))
+    print("modules initialized")
 
 
-def vec2yaw(r):
-    v = np.array(r[:2])
-    v = v / np.linalg.norm(v)
-    yaw = np.arccos(v[0]) if v[1] > 0 else -np.arccos(v[0])
-    return yaw
+def static_vars(**kwargs):
+    def decorate(func):
+        for k in kwargs:
+            setattr(func, k, kwargs[k])
+        return func
+    return decorate
 
 
-past_pose = None
-past_time = None
-
-
+@static_vars(past_pose=None, past_time=None)
 def estimate_vel(pose_in: np.ndarray):
-    global past_pose, past_time
-    if past_pose is None:
-        past_pose = pose_in.copy()
-        past_time = time.time()
+    if estimate_vel.past_pose is None:
+        estimate_vel.past_pose = pose_in.copy()
+        estimate_vel.past_time = time.time()
         return 0.
     else:
-        diff = pose_in - past_pose
+        diff = pose_in - estimate_vel.past_pose
         diff_norm = np.linalg.norm(diff)
-        dt = time.time() - past_time
-        past_pose = pose_in.copy()
-        past_time = time.time()
+        dt = time.time() - estimate_vel.past_time
+        estimate_vel.past_pose = pose_in.copy()
+        estimate_vel.past_time = time.time()
         return diff_norm / dt if diff_norm * dt > 0 else 0
 
 
-# init
-watcher, planner, car = init_modules()
-print("modules initialized")
-plt.imshow(watcher.draw_map(color_full=(255, 255, 255), color_empty=(0, 0, 0)))
-plt.show()
+@static_vars(results_dir='results', img_idx=0)
+def save_results(initial=False):
+    if initial:
+        now = datetime.now()
+        time_now = '{}_{}_{}_{}_{}_{}'.\
+            format(now.year, now.month, now.day,
+                   now.hour, now.minute, now.second)
+        save_results.results_dir = os.path.join(
+            save_results.results_dir, time_now)
+        os.mkdir(save_results.results_dir)
+    else:
+        plt.savefig(
+            '{}/{}.jpg'.format(save_results.results_dir, save_results.img_idx))
+        save_results.img_idx += 1
 
-# start communication
-client = Client(host=HOST, port=PORT, use_bluetooth=use_bluetooth)
-print("Host connected")
 
-# find empty spots
-empty_spots = []
-while len(empty_spots) == 0:
-    img_color = client.receive()
-    _ = watcher.watch(img_color)
-    empty_spots = watcher.find_empty_spots()
-    time.sleep(0.01)
+def find_parking_goal():
+    global watcher, client
+    empty_spots = {}
+    while len(empty_spots) == 0:
+        img_color = client.receive()
+        _ = watcher.watch(img_color)
+        empty_spots = watcher.find_empty_spots()
+        time.sleep(0.1)
+    for spot_id in [7, 5, 6, 7, 8, 9, 1, 2, 3, 4]:
+        if spot_id in empty_spots:
+            return empty_spots[spot_id]
 
-goal = None
-for spot_id in [9, 5, 6, 7, 8, 9, 1, 2, 3, 4]:
-    if spot_id in empty_spots:
-        goal = empty_spots[spot_id]
-        break
-# goal = empty_spots[6] if len(empty_spots) >= 7 else empty_spots[0]
-print("empty spot found: {}".format(goal))
 
-# find path & control
-img_idx = 0
-while True:
+def find_car_pose(car_id=0):
+    global watcher, client, ekf
+    while True:
+        img_color = client.receive()
+        tag_poses = watcher.watch(img_color)
+        if tag_poses is None:
+            continue
+        elif car_id in tag_poses:
+            trans, yaw = tag_poses[car_id]['trans'], tag_poses[car_id]['rot']
+            pose = ekf.apply(np.array([trans[0], trans[1], yaw]))
+            return np.array(pose)
+
+
+def planning_path(goal, car_id=0):
+    global watcher, planner, client
     path = None
     while path is None:
-        img_color = client.receive()
-        cv2.imshow('img', img_color)
-        if cv2.waitKey(1) & 0xFF == 27:
-            break
-
-        tag_poses = watcher.watch(img_color)
-        if tag_poses is None or car_id not in tag_poses:
-            continue
-        trans, yaw = tag_poses[car_id]['trans'], tag_poses[car_id]['rot']
-        pose = [trans[0], trans[1], yaw]
+        pose = find_car_pose(car_id=car_id)
         path = planner.plan_path(pose, goal)
+    return path
 
-    if len(path.x_list) < 5:
-        break
 
-    car.map_color = watcher.draw_map(
-        color_full=(100, 100, 100), color_empty=(0, 0, 0))
-    car.init_path(path)
-    while not car.check_goal() and not (len(car.v) > 10 and np.mean(np.abs(car.v[-10:])) < 0.1):
-        img_color = client.receive()
-        cv2.imshow('img', img_color)
-        if cv2.waitKey(1) & 0xFF == 27:
+def get_control(pose):
+    global controller
+    state = controller.update_pose(pose=pose, v=estimate_vel(pose[:2]))
+    steer, accel = controller.estimate_control(state=state)
+    return np.rad2deg(steer), accel
+
+
+def jammed():
+    global controller
+    return len(controller.v) > 10 and np.mean(np.abs(controller.v[-10:])) < 0.1
+
+
+def main(host='127.0.0.1', port=9999, modem='usbmodem', visualize=True, car_id=0, use_bt=False, save=True):
+    global watcher, planner, controller, client, ekf
+
+    # save results or not
+    save_results(initial=True) if save else None
+
+    # init modules
+    init_modules(map2planning_ratio=0.08)
+    print("modules initialized")
+
+    # start communication
+    client = Client(host=host, port=port, use_bt=use_bt,
+                    basename=modem, vis=visualize)
+    print("Host connected")
+
+    # find empty spots
+    goal = find_parking_goal()
+    print("empty spot found: {}".format(goal))
+    if visualize:
+        plt.imshow(watcher.draw_map(color_full=(
+            100, 100, 100), color_empty=(0, 0, 0)))
+        plt.scatter([goal[0]*100], [goal[1]*100], s=50, c='c')
+        plt.pause(1)
+        plt.figure(figsize=(10, 5))
+
+    # EKF setup
+    ekf = EKF(initial_pose=goal.copy(),
+              xy_obs_noise_std=1.0,
+              initial_yaw_std=np.pi,
+              forward_velocity_noise_std=0.5,
+              yaw_rate_noise_std=0.5)
+
+    # find path & control
+    while True:
+        # planning
+        path = planning_path(goal)
+        # reset controller
+        controller.map_color = watcher.draw_map(
+            color_full=(100, 100, 100), color_empty=(0, 0, 0))
+        controller.init_path(path)
+
+        while not controller.check_goal() and not jammed():
+            # calculate control
+            pose = find_car_pose(car_id=car_id)
+            steer, accel = get_control(pose)
+
+            # send msg
+            handle = 'L' if steer > 0 else 'R'
+            gear = 'F' if accel > 0 else 'B'
+            msg = str('Q{}{}{:.2f},{:.2f}'.format(
+                handle, gear, abs(steer), abs(accel)))
+            client.send(msg)
+
+            if visualize or save:
+                plt.subplot(1, 2, 1)
+                controller.show(ax=plt.gca())
+                plt.subplot(1, 2, 2)
+                ekf.show_results(ax=plt.gca())
+
+                if save:
+                    save_results()
+
+                plt.pause(0.01)
+                plt.subplot(1, 2, 1)
+                plt.gca().clear()
+                plt.subplot(1, 2, 2)
+                plt.gca().clear()
+
+        if controller.check_goal():
             break
-        tag_poses = watcher.watch(img_color)
-        if tag_poses is None or car_id not in tag_poses:
-            continue
-        trans, yaw = tag_poses[car_id]['trans'], tag_poses[car_id]['rot']
-        pose = np.array([trans[0], trans[1], yaw])
 
-        state = car.update_pose(pose=pose, v=estimate_vel(pose[:2]))
-        steer, accel = car.estimate_control(state=state)
-        if use_bluetooth:
-            client.send_bluetooth_control(
-                '{},{}'.format(str(steer), str(accel)))
-            print('{},{}'.format(steer, accel))
-        msg = str('{},{}'.format(str(steer), str(accel)))
-        # client_socket.send(msg.encode(encoding="utf-8"))
-        ser.write(msg.encode())
+    # parking ended
+    msg = str('QLF0.00,0.00'.format(0.00, 0.00))
+    client.send(msg)
+    client.close()
+    print('parking finished')
+    ekf.show_results()
+    plt.show()
 
-        car.show(ax=plt.gca())
-        plt.savefig('{}/{}.jpg'.format(results_dir, img_idx))
-        img_idx += 1
-        plt.pause(0.02)
-        plt.gca().clear()
 
-if use_bluetooth:
-    client.send_bluetooth_control('{},{}'.format(0.0, 0.0))
-client.close()
-print('parking finished')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='main (vehicle parking)')
+    parser.add_argument('--hostname', type=str,
+                        default=None, help='name of host')
+    args = parser.parse_args()
 
-img = cv2.imread('{}/{}.jpg'.format(results_dir, 1))
-fourcc = cv2.VideoWriter_fourcc('D', 'I', 'V', 'X')
-out = cv2.VideoWriter('results/{}.avi'.format(results_idx),
-                      fourcc, 10.0, (img.shape[1], img[0]))
-for i in tqdm(range(img_idx), desc='video'):
-    img = cv2.imread('{}/{}.jpg'.format(results_dir, i))
-    cv2.imshow('img', img)
-    cv2.waitKey(100)
-    out.write(img)
-out.release()
-print('video saved')
+    HOST = '127.0.0.1'
+    PORT = 9999
+    if args.hostname is not None:
+        HOST = socket.gethostbyname(args.hostname)
+
+    main(host=HOST, port=PORT, modem='usbmodem',
+         visualize=True, car_id=0, use_bt=False, save=True)
