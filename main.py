@@ -219,6 +219,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='main (vehicle parking)')
     parser.add_argument('--hostname', type=str,
                         default=None, help='name of host')
+    parser.add_argument('--modem', type=str,
+                        default='usbmodem', help='name of host')
     args = parser.parse_args()
 
     HOST = '127.0.0.1'
@@ -226,5 +228,5 @@ if __name__ == "__main__":
     if args.hostname is not None:
         HOST = socket.gethostbyname(args.hostname)
 
-    main(host=HOST, port=PORT, modem='usbmodem',
+    main(host=HOST, port=PORT, modem=args.modem,
          visualize=True, car_id=0, use_bt=False, save=True)
