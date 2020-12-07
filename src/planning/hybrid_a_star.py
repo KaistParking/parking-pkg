@@ -12,6 +12,8 @@ import math
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial import cKDTree
+import pickle
+import os
 
 from planning.dynamic_programming_heuristic import calc_distance_heuristic
 import planning.reeds_shepp_path_planning as rs
@@ -29,16 +31,16 @@ from planning.car import move, check_car_collision, MAX_STEER, WB, plot_car
 # STEER_COST = 1.0  # steer angle change penalty cost
 # H_COST = 5.0  # Heuristic cost
 
-XY_GRID_RESOLUTION = 0.25  # [m]
+XY_GRID_RESOLUTION = 0.1  # [m]
 YAW_GRID_RESOLUTION = np.deg2rad(15)  # [rad]
 # MOTION_RESOLUTION = 0.1  # [m] path interpolate resolution
-MOTION_RESOLUTION = 0.3  # [m] path interpolate resolution
+MOTION_RESOLUTION = 0.1  # [m] path interpolate resolution
 N_STEER = 20  # number of steer command
 # VR = 0.8  # robot radius
 VR = 0.01
 
-SB_COST = 500.0  # switch back penalty cost
-BACK_COST = 500.0  # backward penalty cost
+SB_COST = 200.0  # switch back penalty cost
+BACK_COST = 200.0  # backward penalty cost
 STEER_CHANGE_COST = 50.0  # steer angle change penalty cost
 STEER_COST = 10.0  # steer angle change penalty cost
 H_COST = 5.0  # Heuristic cost
@@ -273,11 +275,25 @@ def hybrid_a_star_planning(start, goal, ox, oy, xy_resolution=XY_GRID_RESOLUTION
     start[2], goal[2] = rs.pi_2_pi(start[2]), rs.pi_2_pi(goal[2])
     tox, toy = ox[:], oy[:]
 
+    goal_name = '{:.2f}_{:.2f}_{:.2f}'.format(goal[0], goal[1], goal[2])
+
     if obstacle_kd_tree is None:
-        obstacle_kd_tree = cKDTree(np.vstack((tox, toy)).T)
+        if not os.path.isfile('bin/obstacle_kd_tree_{}.bin'.format(goal_name)):
+            obstacle_kd_tree = cKDTree(np.vstack((tox, toy)).T)
+            with open('bin/obstacle_kd_tree_{}.bin'.format(goal_name), 'wb') as file:
+                pickle.dump(obstacle_kd_tree, file)
+        else:
+            with open('bin/obstacle_kd_tree_{}.bin'.format(goal_name), 'rb') as file:
+                obstacle_kd_tree = pickle.load(file)
 
     if config is None:
-        config = Config(tox, toy, xy_resolution, yaw_resolution)
+        if not os.path.isfile('bin/config_{}.bin'.format(goal_name)):
+            config = Config(tox, toy, xy_resolution, yaw_resolution)
+            with open('bin/config_{}.bin'.format(goal_name), 'wb') as file:
+                pickle.dump(config, file)
+        else:
+            with open('bin/config_{}.bin'.format(goal_name), 'rb') as file:
+                config = pickle.load(file)
 
     start_node = Node(round(start[0] / xy_resolution),
                       round(start[1] / xy_resolution),
@@ -291,9 +307,15 @@ def hybrid_a_star_planning(start, goal, ox, oy, xy_resolution=XY_GRID_RESOLUTION
     openList, closedList = {}, {}
 
     if h_dp is None:
-        h_dp = calc_distance_heuristic(
-            goal_node.x_list[-1], goal_node.y_list[-1],
-            ox, oy, xy_resolution, VR)
+        if not os.path.isfile('bin/h_dp_{}.bin'.format(goal_name)):
+            h_dp = calc_distance_heuristic(
+                goal_node.x_list[-1], goal_node.y_list[-1],
+                ox, oy, xy_resolution, VR)
+            with open('bin/h_dp_{}.bin'.format(goal_name), 'wb') as file:
+                pickle.dump(h_dp, file)
+        else:
+            with open('bin/h_dp_{}.bin'.format(goal_name), 'rb') as file:
+                h_dp = pickle.load(file)
 
     pq = []
     openList[calc_index(start_node, config)] = start_node

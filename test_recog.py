@@ -34,15 +34,14 @@ while True:
     img_tags = watcher.draw_tags()
     img_map = watcher.draw_map_with_tags()
 
-    plt.imshow(img_map)
+    plt.imshow(cv2.flip(img_map, 0))
     if watcher.cam_trans is not None:
         print(watcher.cam_trans)
         plt.scatter([watcher.cam_trans[0]*100],
-                    [watcher.cam_trans[1]*100], color='b')
+                    [watcher.map_h - watcher.cam_trans[1]*100], color='b')
     plt.pause(0.01)
     plt.cla()
 
     cv2.imshow('tags', img_tags)
-    cv2.imshow('map', cv2.cvtColor(cv2.flip(img_map, 0), cv2.COLOR_BGR2RGB))
 
 print("end")

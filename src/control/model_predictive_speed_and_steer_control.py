@@ -57,18 +57,18 @@ Q = np.diag([1.0, 1.0, 0.5, 0.5])  # state cost matrix
 Qf = Q  # state final matrix
 
 GOAL_DIS = 0.1  # goal distance
-STOP_SPEED = 0.05  # stop speed
-GOAL_ANGLE = np.deg2rad(5)
+STOP_SPEED = 1.0  # stop speed
+GOAL_ANGLE = np.deg2rad(20)
 
 
 # iterative parameter
 # MAX_ITER = 3  # Max iteration
 # DU_TH = 0.1  # iteration finish param
-MAX_ITER = 2  # Max iteration
-DU_TH = 0.2  # iteration finish param
+MAX_ITER = 3  # Max iteration
+DU_TH = 0.1  # iteration finish param
 
-TARGET_SPEED = 10.0  # [m/s] target speed
-N_IND_SEARCH = 10  # Search index number
+TARGET_SPEED = 5.0  # [m/s] target speed
+N_IND_SEARCH = 15  # Search index number
 
 DT = 0.2  # [s] time tick
 
@@ -81,11 +81,11 @@ WHEEL_WIDTH = 0.08  # [m]
 TREAD = 0.20  # [m]
 WB = 0.8  # [m]
 
-MAX_STEER = np.deg2rad(35.0)  # maximum steering angle [rad]
+MAX_STEER = np.deg2rad(30.0)  # maximum steering angle [rad]
 MAX_DSTEER = np.deg2rad(15.0)  # maximum steering speed [rad/s]
-MAX_SPEED = 10.0  # maximum speed [m/s]
-MIN_SPEED = -10.0  # minimum speed [m/s]
-MAX_ACCEL = 5.0  # maximum accel [m/ss]
+MAX_SPEED = 5.0  # maximum speed [m/s]
+MIN_SPEED = -5.0  # minimum speed [m/s]
+MAX_ACCEL = 3.0  # maximum accel [m/ss]
 
 
 show_animation = False

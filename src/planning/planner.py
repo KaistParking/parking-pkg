@@ -3,7 +3,10 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 
-import planning.hybrid_a_star as a_star
+try:
+    import planning.hybrid_a_star as a_star
+except:
+    import src.planning.hybrid_a_star as a_star
 
 
 def set_planner_params(scale):

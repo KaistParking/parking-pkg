@@ -4,6 +4,7 @@ import cv2
 import bluetooth
 import os
 import serial
+import pickle
 
 
 def search_modem(basename='usbmodem'):
@@ -26,7 +27,7 @@ def receive_all(sock, count):
 
 
 class Client:
-    def __init__(self, host='127.0.0.1', port=9999, use_bt=False, basename='usbmodem', vis=True):
+    def __init__(self, host='127.0.0.1', port=9999, use_bt=False, basename='usbmodem', vis=True, connect=True):
         # init host
         self.host = host
         self.port = port
@@ -35,23 +36,25 @@ class Client:
         self.vis = vis
 
         # vehicle connection
-        self.use_bt = use_bt
-        if not use_bt:
-            self.modem = search_modem(basename=basename)
-            if self.modem is None:
-                print('no modem found')
-                exit(0)
+        self.connect = connect
+        if connect:
+            self.use_bt = use_bt
+            if not use_bt:
+                self.modem = search_modem(basename=basename)
+                if self.modem is None:
+                    print('no modem found')
+                    exit(0)
+                else:
+                    print('modem: {}'.format(self.modem))
+                self.serial = serial.Serial(
+                    port=self.modem,
+                    baudrate=9600,
+                )
+                print("serial connected")
             else:
-                print('modem: {}'.format(self.modem))
-            self.serial = serial.Serial(
-                port=self.modem,
-                baudrate=9600,
-            )
-            print("serial connected")
-        else:
-            self.bt_socket = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-            self.bt_socket.connect(("98:d3:31:fd:3e:0d", 1))
-            print("bt connected")
+                self.bt_socket = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+                self.bt_socket.connect(("98:d3:31:fd:3e:0d", 1))
+                print("bt connected")
 
     def receive(self):
         message = '1'
@@ -67,13 +70,36 @@ class Client:
             cv2.waitKey(1)
         return dec_img
 
+    def receive_tags(self):
+        message = '2'
+        self.client_socket.send(message.encode())
+
+        length = receive_all(self.client_socket, 16)
+        string_data = receive_all(self.client_socket, int(length))
+        data = np.frombuffer(string_data, dtype='uint8')
+        dec_img = cv2.imdecode(data, 1)
+
+        length = receive_all(self.client_socket, 16)
+        string_data = receive_all(self.client_socket, int(length))
+        data = np.frombuffer(string_data, dtype='uint8')
+        dec_tags = pickle.loads(data)
+
+        if self.vis:
+            cv2.imshow('received', dec_img)
+            cv2.waitKey(1)
+        return dec_img, dec_tags
+
     def send(self, msg: str):
+        if not self.connect:
+            return
         if self.use_bt:
             self.bt_socket.send(msg.encode('utf-8'))
         else:
             self.serial.write(msg.encode('utf-8'))
 
     def close(self):
+        if not self.connect:
+            return
         self.client_socket.close()
         if self.use_bt:
             self.bt_socket.close()

@@ -1,24 +1,45 @@
 #include <stdio.h>
 #include <Servo.h>
 
-#define SERVO_PIN       5
-#define MOTOR_SPEED_PIN 6
-#define MOTOR_DI_PIN    7
+#define SERVO_PIN 10
 
 Servo servo;
 
+
+int E1 = 5;     //M1 Speed Control
+int M1 = 4;     //M1 Direction Control
+float global_speed = 0;
+float deg2control_ratio = 2.16;
+float delay_time = 0.6;
+
+float max_speed_car = 4.0; // 4
+float speed2pwm_ratio = 255. / max_speed_car;
+float max_speed = 0.9;
+
+void stop_car(void) {
+  digitalWrite(E1, 0);
+  digitalWrite(M1, LOW);
+}
+void forward(char a) {
+  analogWrite(E1, a);      //PWM Speed Control
+  digitalWrite(M1, HIGH);
+}
+void backward(char a) {
+  analogWrite(E1, a);
+  digitalWrite(M1, LOW);
+}
+
+
 void setup() {
   // setup
-  Serial.begin(9600);
-  Serial.println("start!");
-  pinMode(MOTOR_DI_PIN, OUTPUT);
-  pinMode(MOTOR_SPEED_PIN, OUTPUT);
+  Serial.begin(9600);      //Set Baud Rate
+  for(int i = 4; i <= 5; i++)
+    pinMode(i, OUTPUT);
   servo.attach(SERVO_PIN);
-  
-  // initialize
-  analogWrite(MOTOR_DI_PIN, HIGH);
-  analogWrite(MOTOR_SPEED_PIN, 0);
+  digitalWrite(E1, LOW);
   servo.write(95);
+
+  Serial.println("Run control... q10");
 }
 
 void loop() {
@@ -38,14 +59,6 @@ void loop() {
     Serial.print("input: ");
     Serial.println(sig);
 
-//    // check
-//    if (check[0] == 'Q') {
-//      Serial.print("arrived: ");
-//      Serial.print(sig);
-//      Serial.print("length: ");
-//      Serial.println(sig.length());
-//    }
-
     // parse & control
     if (check[0] == 'Q' && sig.length() >= 12) {
       sig.substring(1, 2).toCharArray(handle, 2);
@@ -61,38 +74,40 @@ void loop() {
 
       //// 1) change steer
       // parse
-      float deg2control_ratio = 2.16;
       float angle = abs_steer;
       if (angle > 30) angle = 30;
-//      else if (angle > 25) angle = 25;
-//      else if (angle > 20) angle = 20;
-//      else if (angle > 15) angle = 15;
-//      else if (angle > 10) angle = 10;
-//      else if (angle > 5) angle = 5;
-//      else angle = 0;
-      if (handle[0] == 'L') angle = 95 - angle*deg2control_ratio;
-      else if (handle[0] == 'R') angle = 95 + angle*deg2control_ratio;
+      if (handle[0] == 'L') angle = 95 + angle*deg2control_ratio;
+      else if (handle[0] == 'R') angle = 95 - angle*deg2control_ratio;
       else angle = 95;
       // control
       servo.write(int(angle));
 
       //// 2) change speed
       // parse
-      float speed2pwm_ratio = 25;
-      float pwm = abs_accel;
-      if (pwm > 0) pwm = 45;
-      else if (pwm == 0) pwm = 0;
-      // control
-      if (gear[0] == 'F') digitalWrite(MOTOR_DI_PIN, HIGH);
-      else if (gear[0] == 'B') digitalWrite(MOTOR_DI_PIN, LOW);
-      else digitalWrite(MOTOR_DI_PIN, HIGH);
-      analogWrite(MOTOR_SPEED_PIN, int(pwm));
+//      float speed2pwm_ratio = 25;
+//      float pwm = abs_accel;
+//      if (pwm > 0) pwm = 45;
+//      else if (pwm == 0) pwm = 0;
+//      // control
+//      if (gear[0] == 'F') forward(50);
+//      else if (gear[0] == 'B') backward(50);
+//      else stop_car();
+
+      if (gear[0] == 'F') global_speed += (abs_accel*delay_time);
+      else if (gear[0] == 'B') global_speed -= (abs_accel*delay_time);
+      if (global_speed < -max_speed) global_speed = -max_speed;
+      else if (global_speed > max_speed) global_speed = max_speed;
+      
+      int pwm = abs(global_speed*speed2pwm_ratio);
+      if (gear[0] == 'F') forward(pwm);
+      else if (gear[0] == 'B') backward(pwm);
+      else stop_car();
   
-      delay(1000);
+      delay(int(delay_time*1000));
     }
   }
   else {
-    analogWrite(MOTOR_SPEED_PIN, 0);
+    stop_car();
   }
 
 }

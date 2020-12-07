@@ -132,13 +132,17 @@ class Watcher:
                 'trans': pose_world2tag, 'rot': -tag_yaw + np.pi/2}
         return results
 
-    def watch(self, img_color):
+    def watch(self, img_color, tags=None):
         # detect tags
-        self.img = img_color.copy()
-        img_gray = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
-        img_gray = cv2.resize(img_gray, self.img_size)
-        self.tags = self.detector.detect(
-            img_gray, estimate_tag_pose=True, camera_params=param, tag_size=self.tag_size)
+        if tags is None:
+            self.img = img_color.copy()
+            img_gray = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
+            img_gray = cv2.resize(img_gray, self.img_size)
+            self.tags = self.detector.detect(
+                img_gray, estimate_tag_pose=True, camera_params=param, tag_size=self.tag_size)
+        else:
+            self.img = img_color.copy()
+            self.tags = tags
 
         # find camera pose
         cam_trans, cam_rot = self.find_camera_frame()
@@ -147,10 +151,10 @@ class Watcher:
         else:
             self.trans_stack.append(cam_trans)
             self.rot_stack.append(cam_rot)
-            if len(self.trans_stack) >= 5:
-                self.trans_stack = self.trans_stack[-5:]
-            if len(self.rot_stack) >= 5:
-                self.rot_stack = self.rot_stack[-5:]
+            if len(self.trans_stack) >= 3:
+                self.trans_stack = self.trans_stack[-3:]
+            if len(self.rot_stack) >= 3:
+                self.rot_stack = self.rot_stack[-3:]
 
             self.cam_trans = np.mean(np.asarray(self.trans_stack), axis=0)
             self.cam_rot = Rotation.from_matrix(
@@ -230,10 +234,10 @@ class Watcher:
 
 class EKF:
     def __init__(self, initial_pose,
-                 xy_obs_noise_std=5.0,
+                 xy_obs_noise_std=1.0,
                  initial_yaw_std=np.pi,
-                 forward_velocity_noise_std=0.5,
-                 yaw_rate_noise_std=0.5):
+                 forward_velocity_noise_std=1.0,
+                 yaw_rate_noise_std=0.17):
 
         # initial state
         self.initial_yaw_std = np.pi
@@ -264,18 +268,18 @@ class EKF:
         self.kf = ExtendedKalmanFilter(self.x, self.P)
 
         # array to store estimated 2d pose [x, y, theta]
-        self.mu_x = [self.x[0], ]
-        self.mu_y = [self.x[1], ]
-        self.mu_theta = [self.x[2], ]
+        self.mu_x = [self.x[0], self.x[0]+0.1]
+        self.mu_y = [self.x[1], self.x[1]+0.1]
+        self.mu_theta = [self.x[2], self.x[2]+0.1]
 
         # array to store estimated error variance of 2d pose
-        self.var_x = [self.P[0, 0], ]
-        self.var_y = [self.P[1, 1], ]
-        self.var_theta = [self.P[2, 2], ]
+        self.var_x = [self.P[0, 0], self.P[0, 0]+0.01]
+        self.var_y = [self.P[1, 1], self.P[1, 1]+0.01]
+        self.var_theta = [self.P[2, 2], self.P[2, 2]+0.01]
 
-        self.times = [time.time(), ]
+        self.times = [time.time(), time.time()+0.01]
         self.pose_last = initial_pose.copy()
-        self.obs_poses = [initial_pose.copy(), ]
+        self.obs_poses = [initial_pose.copy(), initial_pose.copy()]
 
     def apply(self, pose):
         t = time.time()
@@ -284,6 +288,14 @@ class EKF:
         # get control input `u = [v, omega] + noise`
         obs_forward_velocities = np.linalg.norm(pose[:2] - self.pose_last[:2]) / dt
         obs_yaw_rates = (pose[2] - self.pose_last[2]) / dt
+
+        # mu_dt = self.times[-1] - self.times[-2]
+        # if mu_dt < 0.0001:
+        #     mu_dt = 0.0001
+        # err = np.sqrt((self.mu_x[-1] - self.mu_x[-2])**2 + (self.mu_y[-1] - self.mu_y[-2])**2)
+        # obs_forward_velocities = err / mu_dt
+        # obs_yaw_rates = (self.mu_theta[-1] - self.mu_theta[-2]) / mu_dt
+
         u = np.array([
             obs_forward_velocities,
             obs_yaw_rates
@@ -312,7 +324,8 @@ class EKF:
         self.var_y.append(self.kf.P[1, 1])
         self.var_theta.append(self.kf.P[2, 2])
 
-        self.pose_last = pose.copy()
+        # self.pose_last = pose.copy()
+        self.pose_last = np.array([self.mu_x[-1], self.mu_y[-1], self.mu_theta[-1]])
         self.times.append(t)
         self.obs_poses.append(pose.copy())
 
@@ -324,13 +337,10 @@ class EKF:
         mu_y = np.array(self.mu_y)[10:]
 
         ax.set_title("EKF: Position Evaluation")
-        ax.plot(obs_poses[:, 0], obs_poses[:, 1], lw=1, color='b', markersize=3, alpha=0.4, label='observed')
+        ax.plot(obs_poses[:, 0], obs_poses[:, 1], lw=1,
+                color='b', markersize=3, alpha=0.4, label='observed')
         ax.plot(mu_x, mu_y, lw=1, label='estimated', color='r')
         ax.set_xlabel('X [m]')
         ax.set_ylabel('Y [m]')
         ax.legend()
         ax.axis("equal")
-
-
-
-
