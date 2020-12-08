@@ -8,23 +8,30 @@ Servo servo;
 
 int E1 = 5;     //M1 Speed Control
 int M1 = 4;     //M1 Direction Control
-float global_speed = 0;
+float global_speed = 0.;
 float deg2control_ratio = 2.16;
+//float deg2control_ratio = 1.8;
 float delay_time = 0.6;
 
 float max_speed_car = 4.0; // 4
 float speed2pwm_ratio = 255. / max_speed_car;
-float max_speed = 0.9;
+float max_speed = 0.65;
 
 void stop_car(void) {
   digitalWrite(E1, 0);
   digitalWrite(M1, LOW);
 }
 void forward(char a) {
+  analogWrite(E1, 100);
+  digitalWrite(M1, HIGH);
+  delay(50);
   analogWrite(E1, a);      //PWM Speed Control
   digitalWrite(M1, HIGH);
 }
 void backward(char a) {
+  analogWrite(E1, 100);
+  digitalWrite(M1, LOW);
+  delay(50);
   analogWrite(E1, a);
   digitalWrite(M1, LOW);
 }
@@ -58,6 +65,9 @@ void loop() {
     sig.substring(0, 1).toCharArray(check, 2);
     Serial.print("input: ");
     Serial.println(sig);
+
+    
+    
 
     // parse & control
     if (check[0] == 'Q' && sig.length() >= 12) {
@@ -100,7 +110,7 @@ void loop() {
       
       int pwm = abs(global_speed*speed2pwm_ratio);
       if (gear[0] == 'F') forward(pwm);
-      else if (gear[0] == 'B') backward(pwm);
+      else if (gear[0] == 'B') backward(pwm*1.2);
       else stop_car();
   
       delay(int(delay_time*1000));

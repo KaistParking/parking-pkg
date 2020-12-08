@@ -100,7 +100,7 @@ def find_parking_goal():
             break
         time.sleep(0.1)
     cv2.destroyAllWindows()
-    for spot_id in [7, 5, 6, 7, 8, 9, 1, 2, 3, 4]:
+    for spot_id in [6, 5, 6, 7, 8, 9, 3, 4]:
         if spot_id in empty_spots:
             return empty_spots[spot_id]
 
@@ -127,10 +127,8 @@ def find_car_pose(car_id=0):
 
 def planning_path(goal, car_id=0):
     global watcher, planner, client
-    path = None
-    while path is None:
-        pose = find_car_pose(car_id=car_id)
-        path = planner.plan_path(pose, goal)
+    pose = find_car_pose(car_id=car_id)
+    path = planner.plan_path(pose, goal)
     return path
 
 
@@ -154,12 +152,14 @@ def main(host='127.0.0.1', port=9999, modem='usbmodem', visualize=True, car_id=0
     print("modules initialized")
 
     # 2) start communication
-    client = Client(host=host, port=port, use_bt=use_bt, basename=modem, vis=visualize, connect=connect)
+    client = Client(host=host, port=port, use_bt=use_bt,
+                    basename=modem, vis=visualize, connect=connect)
     print("Host connected")
 
     # 3-1) find empty spots
     print('searching tags...')
     goal = find_parking_goal()
+    # goal[2] = -goal[2]
     print("empty spot found: {}".format(goal))
     if visualize:
         plt.figure(figsize=(10, 5))
@@ -186,16 +186,29 @@ def main(host='127.0.0.1', port=9999, modem='usbmodem', visualize=True, car_id=0
               forward_velocity_noise_std=1.5,
               yaw_rate_noise_std=0.17)
 
+    print('initial planning...')
+    path = planning_path(goal)
+
     # find path & control
+    print('parking start')
     while True:
+        t = time.time()
         # planning
-        path = planning_path(goal)
+        if path is None:
+            while path is None:
+                print('searching path... please move the car')
+                time.sleep(0.5)
+                path = planning_path(goal)
+        else:
+            path_ = planning_path(goal)
+            path = path_ if path_ is not None else path
+
         # reset controller
         controller.map_color = watcher.draw_map(
             color_full=(100, 100, 100), color_empty=(0, 0, 0))
         controller.init_path(path)
 
-        while not controller.check_goal() and not jammed():
+        while not controller.check_goal() and not jammed() and (time.time() - t) <= 2.0:
             # calculate control
             pose = find_car_pose(car_id=car_id)
             steer, accel = get_control(pose)
@@ -217,6 +230,7 @@ def main(host='127.0.0.1', port=9999, modem='usbmodem', visualize=True, car_id=0
                     save_results()
 
                 plt.pause(0.01)
+                # plt.pause(3)
                 plt.subplot(1, 2, 1)
                 plt.gca().clear()
                 plt.subplot(1, 2, 2)
@@ -226,13 +240,10 @@ def main(host='127.0.0.1', port=9999, modem='usbmodem', visualize=True, car_id=0
             break
 
     # parking ended
+    print('parking finished')
     msg = str('QLF0.00,0.00'.format(0.00, 0.00))
     client.send(msg)
     client.send(msg)
-    client.send(msg)
-    client.send(msg)
-    client.send(msg)
-    print('parking finished')
     client.close()
 
 
